@@ -1,0 +1,64 @@
+name: Markdown Frontmatter Lint (Reusable)
+
+# Reusable workflow — herhangi bir repo'da kullanilabilir
+# Karar 009 (vault beyin standardi) frontmatter zorunluluğu için
+# Her .md dosyasinda zorunlu 5 alan: type, title, tags(>=2), related(>=2), updated
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: 'Hangi yollar lint edilsin (default: brain/, docs/)'
+        required: false
+        default: 'brain docs'
+        type: string
+      strict:
+        description: 'Strict mod (eksik frontmatter = fail)'
+        required: false
+        default: 'true'
+        type: string
+
+jobs:
+  frontmatter-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Frontmatter zorunlu alan kontrolu
+        run: |
+          set -e
+          paths="${{ inputs.paths }}"
+          strict="${{ inputs.strict }}"
+          missing=0
+
+          for p in $paths; do
+            [ ! -d "$p" ] && continue
+            while IFS= read -r f; do
+              # Skip _archive ve templates
+              case "$f" in
+                */_archive/*|*/templates/*) continue ;;
+              esac
+
+              # Frontmatter cikart
+              fm=$(awk 'NR==1 && /^---$/ {flag=1; next} /^---$/ && flag {exit} flag {print}' "$f")
+
+              issues=""
+              echo "$fm" | grep -q "^type:" || issues="$issues type-yok"
+              echo "$fm" | grep -q "^title:" || issues="$issues title-yok"
+              echo "$fm" | grep -qE "^(updated|tarih|date|created):" || issues="$issues updated-yok"
+
+              tag_count=$(echo "$fm" | grep -cE '^tags:|^- ')
+              [ "$tag_count" -lt 1 ] && issues="$issues tags-yok"
+
+              if [ -n "$issues" ]; then
+                echo "DRIFT: $f —$issues"
+                missing=$((missing + 1))
+              fi
+            done < <(find "$p" -name "*.md" -type f)
+          done
+
+          if [ "$missing" -gt 0 ]; then
+            echo ""
+            echo "Toplam $missing dosyada frontmatter drift."
+            [ "$strict" = "true" ] && exit 1
+          fi

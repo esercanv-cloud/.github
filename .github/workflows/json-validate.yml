@@ -1,0 +1,50 @@
+name: JSON Validate (Reusable)
+
+# Reusable workflow — n8n workflow JSON, Shopify section schema, herhangi bir JSON
+# n8n exports, settings_schema.json, products.json gibi dosyalar push edildiğinde
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: 'Hangi yollar validate edilsin (glob, virgul ayirici)'
+        required: false
+        default: '**/*.json'
+        type: string
+
+jobs:
+  json-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JSON syntax check
+        run: |
+          set -e
+          paths="${{ inputs.paths }}"
+          IFS=',' read -ra patterns <<< "$paths"
+          fail=0
+
+          for pattern in "${patterns[@]}"; do
+            pattern=$(echo "$pattern" | xargs)
+            while IFS= read -r f; do
+              [ ! -f "$f" ] && continue
+              # node_modules ve .git skip
+              case "$f" in
+                */node_modules/*|*/.git/*) continue ;;
+              esac
+
+              if ! python3 -c "import json,sys; json.load(open('$f'))" 2>/dev/null; then
+                echo "INVALID JSON: $f"
+                python3 -c "import json,sys; json.load(open('$f'))" 2>&1 | head -3
+                fail=$((fail + 1))
+              fi
+            done < <(find . -path "./$pattern" 2>/dev/null || find . -name "${pattern##*/}")
+          done
+
+          if [ "$fail" -gt 0 ]; then
+            echo ""
+            echo "Toplam $fail JSON dosyasi gecersiz."
+            exit 1
+          fi
+          echo "Tum JSON dosyalari valid."
