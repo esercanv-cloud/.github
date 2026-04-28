@@ -66,5 +66,7 @@ jobs:
           if [ "$missing" -gt 0 ]; then
             echo ""
             echo "Toplam $missing dosyada frontmatter drift."
-            [ "$strict" = "true" ] && exit 1
+            if [ "$strict" = "true" ]; then
+              exit 1
+            fi
           fi
