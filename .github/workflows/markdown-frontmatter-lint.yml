@@ -44,7 +44,13 @@ jobs:
 
               issues=""
               echo "$fm" | grep -q "^type:" || issues="$issues type-yok"
-              echo "$fm" | grep -q "^title:" || issues="$issues title-yok"
+
+              # Karar 008 istisna: type=rapor ise title zorunlu degil (ozet/konu/tarih yeterli)
+              type_val=$(echo "$fm" | awk -F': *' '/^type:/ {print $2; exit}')
+              if [ "$type_val" != "rapor" ]; then
+                echo "$fm" | grep -q "^title:" || issues="$issues title-yok"
+              fi
+
               echo "$fm" | grep -qE "^(updated|tarih|date|created):" || issues="$issues updated-yok"
 
               tag_count=$(echo "$fm" | grep -cE '^tags:|^- ')
